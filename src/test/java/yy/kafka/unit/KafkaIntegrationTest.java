@@ -36,6 +36,7 @@ import java.util.concurrent.TimeoutException;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 public class KafkaIntegrationTest
 {
@@ -52,7 +53,7 @@ public class KafkaIntegrationTest
   @After
   public void shutdown() throws Exception
   {
-    Field f = kafkaUnitServer.getClass().getSuperclass().getDeclaredField("broker");
+    Field f = kafkaUnitServer.getClass().getDeclaredField("broker");
     f.setAccessible(true);
     KafkaServerStartable broker = (KafkaServerStartable) f.get(kafkaUnitServer);
     assertEquals(1024, (int) broker.serverConfig().logSegmentBytes());
@@ -130,6 +131,61 @@ public class KafkaIntegrationTest
     assertEquals("Received message value is incorrect", "value", receivedMessage.value());
     assertEquals("Received message key is incorrect", "key", receivedMessage.key());
     assertEquals("Received message topic is incorrect", testTopic, receivedMessage.topic());
+  }
+
+  @Test(timeout = 30000)
+  public void closeConnectionBetweenTopicCreations() throws Exception
+  {
+    String topicPrefix = "TestTopic";
+    for (int i = 0; i < 17; i++)
+    {
+      kafkaUnitServer.createTopic(topicPrefix + i);
+    }
+  }
+
+  @Test
+  public void canDeleteTopic() throws Exception{
+    //given
+    String testTopic = "TestTopic";
+    kafkaUnitServer.createTopic(testTopic);
+    ProducerRecord<String, String> producerRecord = new ProducerRecord<>(testTopic, "key", "value");
+
+    //when
+    kafkaUnitServer.sendMessages(producerRecord);
+    kafkaUnitServer.readMessages(testTopic, 1);
+
+    kafkaUnitServer.deleteTopic(testTopic);
+    kafkaUnitServer.readMessages(testTopic, 0);
+  }
+
+  @Test
+  public void canListTopics() throws Exception{
+    String testTopic1 = "TestTopic1";
+    kafkaUnitServer.createTopic(testTopic1);
+    String testTopic2 = "TestTopic2";
+    kafkaUnitServer.createTopic(testTopic2);
+
+    List<String> topics = kafkaUnitServer.listTopics();
+    assertEquals(2, topics.size());
+    assertTrue(topics.contains(testTopic1));
+    assertTrue(topics.contains(testTopic2));
+  }
+
+  @Test
+  public void canDeleteAllTopics(){
+    String testTopic1 = "TestTopic1";
+    kafkaUnitServer.createTopic(testTopic1);
+    String testTopic2 = "TestTopic2";
+    kafkaUnitServer.createTopic(testTopic2);
+
+    List<String> topics = kafkaUnitServer.listTopics();
+    assertTrue(topics.contains(testTopic1));
+    assertTrue(topics.contains(testTopic2));
+
+    kafkaUnitServer.deleteAllTopics();
+    topics = kafkaUnitServer.listTopics();
+    assertFalse(topics.contains(testTopic1));
+    assertFalse(topics.contains(testTopic2));
   }
 
   private void assertKafkaServerIsAvailable(KafkaUnit server) throws TimeoutException
