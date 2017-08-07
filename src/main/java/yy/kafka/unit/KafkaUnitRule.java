@@ -19,45 +19,57 @@ import org.junit.rules.ExternalResource;
 
 import java.io.IOException;
 
-public class KafkaUnitRule extends ExternalResource {
+public class KafkaUnitRule extends ExternalResource
+{
 
-    private final KafkaUnit kafkaUnit;
+  private final KafkaUnit kafkaUnit;
 
-    public KafkaUnitRule() {
-        try {
-            this.kafkaUnit = new KafkaUnit();
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
+  public KafkaUnitRule()
+  {
+    try
+    {
+      this.kafkaUnit = new KafkaUnit();
     }
-
-    public KafkaUnitRule(int zkPort, int kafkaPort) {
-        this.kafkaUnit = new KafkaUnit(zkPort, kafkaPort);
+    catch (IOException e)
+    {
+      throw new RuntimeException(e);
     }
+  }
 
-    public KafkaUnitRule(String zkConnectionString, String kafkaConnectionString) {
-        this.kafkaUnit = new KafkaUnit(zkConnectionString, kafkaConnectionString);
-    }
+  public KafkaUnitRule(int zkPort, int kafkaPort)
+  {
+    this.kafkaUnit = new KafkaUnit(zkPort, kafkaPort);
+  }
 
-    @Override
-    protected void before() throws Throwable {
-        kafkaUnit.startup();
-    }
+  public KafkaUnitRule(String zkConnectionString, String kafkaConnectionString)
+  {
+    this.kafkaUnit = new KafkaUnit(zkConnectionString, kafkaConnectionString);
+  }
 
-    @Override
-    protected void after() {
-        kafkaUnit.shutdown();
-    }
+  @Override
+  protected void before() throws Throwable
+  {
+    kafkaUnit.startup();
+  }
 
-    public int getZkPort() {
-        return kafkaUnit.getZkPort();
-    }
+  @Override
+  protected void after()
+  {
+    kafkaUnit.shutdown();
+  }
 
-    public int getKafkaPort() {
-        return kafkaUnit.getBrokerPort();
-    }
+  public int getZkPort()
+  {
+    return kafkaUnit.getZkPort();
+  }
 
-    public KafkaUnit getKafkaUnit() {
-        return kafkaUnit;
-    }
+  public int getKafkaPort()
+  {
+    return kafkaUnit.getBrokerPort();
+  }
+
+  public KafkaUnit getKafkaUnit()
+  {
+    return kafkaUnit;
+  }
 }

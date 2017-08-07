@@ -15,7 +15,6 @@
  */
 package yy.kafka.unit;
 
-import kafka.producer.KeyedMessage;
 import kafka.server.KafkaServerStartable;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
@@ -29,109 +28,122 @@ import org.junit.ComparisonFailure;
 import org.junit.Test;
 
 import java.lang.reflect.Field;
-import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.TimeoutException;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
-public class KafkaIntegrationTest {
+public class KafkaIntegrationTest
+{
+  private KafkaUnit kafkaUnitServer;
 
-    private KafkaUnit kafkaUnitServer;
+  @Before
+  public void setUp() throws Exception
+  {
+    kafkaUnitServer = new KafkaUnit(5000, 5001);
+    kafkaUnitServer.setKafkaBrokerConfig("log.segment.bytes", "1024");
+    kafkaUnitServer.startup();
+  }
 
-    @Before
-    public void setUp() throws Exception {
-        kafkaUnitServer = new KafkaUnit(5000, 5001);
-        kafkaUnitServer.setKafkaBrokerConfig("log.segment.bytes", "1024");
-        kafkaUnitServer.startup();
+  @After
+  public void shutdown() throws Exception
+  {
+    Field f = kafkaUnitServer.getClass().getSuperclass().getDeclaredField("broker");
+    f.setAccessible(true);
+    KafkaServerStartable broker = (KafkaServerStartable) f.get(kafkaUnitServer);
+    assertEquals(1024, (int) broker.serverConfig().logSegmentBytes());
+
+    kafkaUnitServer.shutdown();
+  }
+
+  @Test
+  public void kafkaServerIsAvailable() throws Exception
+  {
+    assertKafkaServerIsAvailable(kafkaUnitServer);
+  }
+
+  @Test(expected = ComparisonFailure.class)
+  public void shouldThrowComparisonFailureIfMoreMessagesRequestedThanSent() throws Exception
+  {
+    //given
+    String testTopic = "TestTopic";
+    kafkaUnitServer.createTopic(testTopic);
+    ProducerRecord<String, String> producerRecord = new ProducerRecord<>(testTopic, "key", "value");
+
+    //when
+    kafkaUnitServer.sendMessages(producerRecord);
+
+    try
+    {
+      kafkaUnitServer.readMessages(testTopic, 2);
+      fail("Expected ComparisonFailure to be thrown");
     }
-
-    @After
-    public void shutdown() throws Exception {
-        Field f = kafkaUnitServer.getClass().getDeclaredField("broker");
-        f.setAccessible(true);
-        KafkaServerStartable broker = (KafkaServerStartable) f.get(kafkaUnitServer);
-        assertEquals(1024, (int)broker.serverConfig().logSegmentBytes());
-
-        kafkaUnitServer.shutdown();
+    catch (ComparisonFailure e)
+    {
+      assertEquals("Wrong value for 'expected'", "2", e.getExpected());
+      assertEquals("Wrong value for 'actual'", "1", e.getActual());
+      assertEquals("Wrong error message", "Incorrect number of messages returned", e.getMessage());
     }
+  }
 
-    @Test
-    public void kafkaServerIsAvailable() throws Exception {
-        assertKafkaServerIsAvailable(kafkaUnitServer);
-    }
+  @Test
+  public void startKafkaServerWithoutParamsAndSendMessage() throws Exception
+  {
+    KafkaUnit noParamServer = new KafkaUnit();
+    noParamServer.startup();
+    assertKafkaServerIsAvailable(noParamServer);
+    assertTrue("Kafka port needs to be non-negative", noParamServer.getBrokerPort() > 0);
+    assertTrue("Zookeeper port needs to be non-negative", noParamServer.getZkPort() > 0);
+  }
 
-    @Test(expected = ComparisonFailure.class)
-    public void shouldThrowComparisonFailureIfMoreMessagesRequestedThanSent() throws Exception {
-        //given
-        String testTopic = "TestTopic";
-        kafkaUnitServer.createTopic(testTopic);
-        KeyedMessage<String, String> keyedMessage = new KeyedMessage<>(testTopic, "key", "value");
+  @Test
+  public void canUseKafkaConnectToProduce() throws Exception
+  {
+    final String topic = "KafkakConnectTestTopic";
+    Properties props = new Properties();
+    props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, LongSerializer.class.getCanonicalName());
+    props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getCanonicalName());
+    props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaUnitServer.getKafkaConnect());
+    Producer<Long, String> producer = new KafkaProducer<>(props);
+    ProducerRecord<Long, String> record = new ProducerRecord<>(topic, 1L, "test");
+    producer.send(record);      // would be good to have KafkaUnit.sendMessages() support the new producer
+    assertEquals("test", kafkaUnitServer.readMessages(topic, 1).get(0));
+  }
 
-        //when
-        kafkaUnitServer.sendMessages(keyedMessage);
+  @Test
+  public void canReadProducerRecords() throws Exception
+  {
+    //given
+    String testTopic = "TestTopic";
+    kafkaUnitServer.createTopic(testTopic);
+    ProducerRecord<String, String> producerRecord = new ProducerRecord<>(testTopic, "key", "value");
 
-        try {
-            kafkaUnitServer.readMessages(testTopic, 2);
-            fail("Expected ComparisonFailure to be thrown");
-        } catch (ComparisonFailure e) {
-            assertEquals("Wrong value for 'expected'", "2", e.getExpected());
-            assertEquals("Wrong value for 'actual'", "1", e.getActual());
-            assertEquals("Wrong error message", "Incorrect number of messages returned", e.getMessage());
-        }
-    }
+    //when
+    kafkaUnitServer.sendMessages(producerRecord);
 
-    @Test
-    public void startKafkaServerWithoutParamsAndSendMessage() throws Exception {
-        KafkaUnit noParamServer = new KafkaUnit();
-        noParamServer.startup();
-        assertKafkaServerIsAvailable(noParamServer);
-        assertTrue("Kafka port needs to be non-negative", noParamServer.getBrokerPort() > 0);
-        assertTrue("Zookeeper port needs to be non-negative", noParamServer.getZkPort() > 0);
-    }
+    ProducerRecord<String, String> receivedMessage = kafkaUnitServer.readProducerRecords(testTopic, 1).get(0);
 
-    @Test
-    public void canUseKafkaConnectToProduce() throws Exception {
-        final String topic = "KafkakConnectTestTopic";
-        Properties props = new Properties();
-        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, LongSerializer.class.getCanonicalName());
-        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getCanonicalName());
-        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaUnitServer.getKafkaConnect());
-        Producer<Long, String> producer = new KafkaProducer<>(props);
-        ProducerRecord<Long, String> record = new ProducerRecord<>(topic, 1L, "test");
-        producer.send(record);      // would be good to have KafkaUnit.sendMessages() support the new producer
-        assertEquals("test", kafkaUnitServer.readMessages(topic, 1).get(0));
-    }
+    assertEquals("Received message value is incorrect", "value", receivedMessage.value());
+    assertEquals("Received message key is incorrect", "key", receivedMessage.key());
+    assertEquals("Received message topic is incorrect", testTopic, receivedMessage.topic());
+  }
 
-    @Test
-    public void  canReadKeyedMessages() throws Exception {
-        //given
-        String testTopic = "TestTopic";
-        kafkaUnitServer.createTopic(testTopic);
-        KeyedMessage<String, String> keyedMessage = new KeyedMessage<>(testTopic, "key", "value");
+  private void assertKafkaServerIsAvailable(KafkaUnit server) throws TimeoutException
+  {
+    //given
+    String testTopic = "TestTopic";
+    server.createTopic(testTopic);
+    ProducerRecord<String, String> producerRecord = new ProducerRecord<>(testTopic, "key", "value");
 
-        //when
-        kafkaUnitServer.sendMessages(keyedMessage);
+    //when
+    server.sendMessages(producerRecord);
+    List<String> messages = server.readMessages(testTopic, 1);
 
-        KeyedMessage<String, String> receivedMessage = kafkaUnitServer.readKeyedMessages(testTopic, 1).get(0);
-
-        assertEquals("Received message value is incorrect", "value", receivedMessage.message());
-        assertEquals("Received message key is incorrect", "key", receivedMessage.key());
-        assertEquals("Received message topic is incorrect", testTopic, receivedMessage.topic());
-    }
-
-    private void assertKafkaServerIsAvailable(KafkaUnit server) throws TimeoutException {
-        //given
-        String testTopic = "TestTopic";
-        server.createTopic(testTopic);
-        KeyedMessage<String, String> keyedMessage = new KeyedMessage<>(testTopic, "key", "value");
-
-        //when
-        server.sendMessages(keyedMessage);
-        List<String> messages = server.readMessages(testTopic, 1);
-
-        //then
-        assertEquals(Arrays.asList("value"), messages);
-    }
+    //then
+    assertEquals(Collections.singletonList("value"), messages);
+  }
 }
