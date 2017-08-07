@@ -12,6 +12,12 @@ public class KafkaUnitTest
   }
 
   @Test(expected = RuntimeException.class)
+  public void failToConstructKafkaUnitFromConnectionString()
+  {
+    new KafkaUnit("192.168.1.1:2181", "192.168.1.1:9092");
+  }
+
+  @Test(expected = RuntimeException.class)
   public void failToConstructKafkaUnitFromZooKeeperConnectionStringWithNonNumericPort()
   {
     new KafkaUnit("localhost:abcd", "localhost:9092");

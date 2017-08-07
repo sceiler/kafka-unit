@@ -16,8 +16,8 @@ public class LogDirUtil
    * Creates a temp directory with the specified prefix and attaches a
    * shutdown hook to delete the directory on jvm exit.
    *
-   * @param prefix
-   * @return
+   * @param prefix temporary log dir prefix
+   * @return file object
    */
   public static File prepareLogDir(String prefix)
   {
@@ -32,20 +32,15 @@ public class LogDirUtil
               "Unable to create temp folder with prefix " + prefix, e);
     }
     logDir.deleteOnExit();
-    Runtime.getRuntime().addShutdownHook(new Thread(new Runnable()
-    {
-      @Override
-      public void run()
+    Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+      try
       {
-        try
-        {
-          FileUtils.deleteDirectory(logDir);
-        }
-        catch (IOException e)
-        {
-          LOGGER.warn("Problems deleting temporary directory "
-                  + logDir.getAbsolutePath(), e);
-        }
+        FileUtils.deleteDirectory(logDir);
+      }
+      catch (IOException e)
+      {
+        LOGGER.warn("Problems deleting temporary directory "
+                + logDir.getAbsolutePath(), e);
       }
     }));
     return logDir;
