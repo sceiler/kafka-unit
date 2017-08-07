@@ -1,4 +1,4 @@
-package info.batey.kafka.unit;
+package yy.kafka.unit;
 
 
 import org.junit.Test;

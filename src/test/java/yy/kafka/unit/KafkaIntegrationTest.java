@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package info.batey.kafka.unit;
+package yy.kafka.unit;
 
 import kafka.producer.KeyedMessage;
 import kafka.server.KafkaServerStartable;
