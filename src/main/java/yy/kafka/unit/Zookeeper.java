@@ -15,7 +15,6 @@
  */
 package yy.kafka.unit;
 
-import org.apache.commons.io.FileUtils;
 import org.apache.zookeeper.server.NIOServerCnxnFactory;
 import org.apache.zookeeper.server.ServerCnxnFactory;
 import org.apache.zookeeper.server.ZooKeeperServer;
@@ -37,31 +36,8 @@ public class Zookeeper
 
   public void startup()
   {
-
-    final File snapshotDir;
-    final File logDir;
-    try
-    {
-      snapshotDir = java.nio.file.Files.createTempDirectory("zookeeper-snapshot").toFile();
-      logDir = java.nio.file.Files.createTempDirectory("zookeeper-logs").toFile();
-    }
-    catch (IOException e)
-    {
-      throw new RuntimeException("Unable to start Kafka", e);
-    }
-
-    Runtime.getRuntime().addShutdownHook(new Thread(() ->
-    {
-      try
-      {
-        FileUtils.deleteDirectory(snapshotDir);
-        FileUtils.deleteDirectory(logDir);
-      }
-      catch (IOException ignored)
-      {
-
-      }
-    }));
+    final File snapshotDir = LogDirUtil.prepareLogDir("zookeeper-snapshot");
+    final File logDir = LogDirUtil.prepareLogDir("zookeeper-logs");
 
     try
     {
